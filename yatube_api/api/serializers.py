@@ -1,23 +1,59 @@
+﻿from django.contrib.auth import get_user_model
 from rest_framework import serializers
-from rest_framework.relations import SlugRelatedField
 
+from posts.models import Comment, Follow, Group, Post
 
-from posts.models import Comment, Post
+User = get_user_model()
 
 
 class PostSerializer(serializers.ModelSerializer):
-    author = SlugRelatedField(slug_field='username', read_only=True)
+    author = serializers.SlugRelatedField(
+        slug_field='username', read_only=True
+    )
 
     class Meta:
-        fields = '__all__'
         model = Post
+        fields = '__all__'
 
 
 class CommentSerializer(serializers.ModelSerializer):
     author = serializers.SlugRelatedField(
-        read_only=True, slug_field='username'
+        slug_field='username', read_only=True
+    )
+    post = serializers.PrimaryKeyRelatedField(read_only=True)
+
+    class Meta:
+        model = Comment
+        fields = '__all__'
+
+
+class GroupSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Group
+        fields = '__all__'
+
+
+class FollowSerializer(serializers.ModelSerializer):
+    user = serializers.SlugRelatedField(
+        slug_field='username', read_only=True
+    )
+    following = serializers.SlugRelatedField(
+        slug_field='username', queryset=User.objects.all()
     )
 
     class Meta:
-        fields = '__all__'
-        model = Comment
+        model = Follow
+        fields = ('user', 'following')
+
+    def validate_following(self, value):
+        request = self.context.get('request')
+        if request.user == value:
+            raise serializers.ValidationError(
+                'Нельзя подписаться на самого себя!'
+            )
+        if Follow.objects.filter(user=request.user, following=value).exists():
+            raise serializers.ValidationError(
+                'Вы уже подписаны на этого пользователя.'
+            )
+        return value
